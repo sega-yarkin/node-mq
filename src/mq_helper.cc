@@ -7,8 +7,8 @@
 #include "queue.h"
 #include <fcntl.h>
 
-using namespace node;
-//using namespace v8;
+//using namespace node;
+using namespace v8;
 
 
 
@@ -29,7 +29,6 @@ void Init( Handle<Object> exports ) {
 	// Export mq functions
 	NODE_SET_METHOD( exports, "open"    , mq::open    );
 	NODE_SET_METHOD( exports, "get_attr", mq::getattr );
-	NODE_SET_METHOD( exports, "set_attr", mq::setattr );
 	NODE_SET_METHOD( exports, "send"    , mq::send    );
 	NODE_SET_METHOD( exports, "receive" , mq::receive );
 	NODE_SET_METHOD( exports, "close"   , mq::close   );

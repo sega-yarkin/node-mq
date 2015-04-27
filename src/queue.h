@@ -5,10 +5,16 @@
 #define QUEUE_H_
 
 #include <node.h>
+#include <node_buffer.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <mqueue.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <assert.h>
+#include <string.h>
+#include <limits.h>
+
 
 namespace mq {
 
@@ -42,7 +48,7 @@ void send( const FunctionCallbackInfo<Value>& args );
  *
  * mq.receive(
  *      mqd, buff, len,
- *      function callback( err, buff, prio ) {
+ *      function callback( err, buff, size, prio ) {
  *              //
  *      }
  * )
