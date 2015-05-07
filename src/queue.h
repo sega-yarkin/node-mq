@@ -46,11 +46,8 @@ void send( const FunctionCallbackInfo<Value>& args );
 /**
  * Receive a message from a message queue;
  *
- * mq.receive(
- *      mqd, buff, len,
- *      function callback( err, buff, size, prio ) {
- *              //
- *      }
+ * var res = mq.receive( mqd[, buff, len] );
+ * res -> Error | { buff, size, prio }
  * )
  */
 void receive( const FunctionCallbackInfo<Value>& args );

@@ -6,6 +6,8 @@
 namespace mq {
 
 using node::ErrnoException;
+namespace Buffer = node::Buffer;
+
 using v8::FunctionCallbackInfo;
 using v8::Isolate;
 using v8::HandleScope;
@@ -31,13 +33,18 @@ using v8::Undefined;
 		String::NewFromUtf8( isolate, name ), \
 		Number::New( isolate, value ) \
 	)
+#define SET_PROP_BUFF( isolate, object, name, value ) \
+	object->Set( \
+		String::NewFromUtf8( isolate, name ), \
+		value \
+	)
 
 
 void open( const FunctionCallbackInfo<Value>& args ) {
 	// args[0] - name
 	// args[1] - flags
-	// args[2] - mode
-	// args[3] - attr
+	// args[2] - [mode]
+	// args[3] - [attr]
 	// return mqd
 	
 	Isolate* isolate = Isolate::GetCurrent();
@@ -54,7 +61,7 @@ void open( const FunctionCallbackInfo<Value>& args ) {
 	
 	// Check input arguments
 	if( args.Length() < 2 ) {
-		TYPE_ERROR( isolate, "Required at least two argument" );
+		TYPE_ERROR( isolate, "Required at least two arguments" );
 		return;
 	}
 	
@@ -165,8 +172,8 @@ void getattr( const FunctionCallbackInfo<Value>& args ) {
 void send( const FunctionCallbackInfo<Value>& args ) {
 	// args[0] - mqd
 	// args[1] - buff
-	// args[2] - len
-	// args[3] - prio
+	// args[2] - [len]
+	// args[3] - [prio]
 	// return void
 	
 	Isolate* isolate = Isolate::GetCurrent();
@@ -196,10 +203,10 @@ void send( const FunctionCallbackInfo<Value>& args ) {
 		return;
 	}
 	
-	if( node::Buffer::HasInstance(args[1]) ) {
+	if( Buffer::HasInstance(args[1]) ) {
 		Local<Object> val = args[1]->ToObject();
-		msg_ptr = node::Buffer::Data( val );
-		src_len = node::Buffer::Length( val );
+		msg_ptr = Buffer::Data( val );
+		src_len = Buffer::Length( val );
 	}
 	else if( args[1]->IsString() ) {
 		Local<String> str = args[1]->ToString();
@@ -240,10 +247,9 @@ void send( const FunctionCallbackInfo<Value>& args ) {
 
 void receive( const FunctionCallbackInfo<Value>& args ) {
 	// args[0] - mqd
-	// args[1] - buff
-	// args[2] - len
-	// args[3] - callback
-	// return void
+	// args[1] - [buff]
+	// args[2] - [len]
+	// return Object
 	
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope( isolate );
@@ -252,14 +258,12 @@ void receive( const FunctionCallbackInfo<Value>& args ) {
 	char*    msg_ptr = NULL;
 	size_t   msg_len = 0;
 	uint32_t msg_prio = 0;
-	Local<Function> cb;
 	
 	Local<Object> buff;
-	//bool buff_created = false;
 	
 	// Check input arguments
-	if( args.Length() < 2 ) {
-		TYPE_ERROR( isolate, "Required at least two argument" );
+	if( args.Length() < 1 ) {
+		TYPE_ERROR( isolate, "Required at least one argument" );
 		return;
 	}
 	
@@ -273,12 +277,7 @@ void receive( const FunctionCallbackInfo<Value>& args ) {
 		return;
 	}
 	
-	if( args.Length() == 2 ) {
-		if( ! args[1]->IsFunction() ) {
-			TYPE_ERROR( isolate, "Last argument should be a function" );
-			return;
-		}
-		cb = Local<Function>::Cast( args[1] );
+	if( args.Length() == 1 ) {
 		struct mq_attr attr;
 		int ret = mq_getattr( mqd, &attr );
 		if( ret != 0 ) {
@@ -286,26 +285,20 @@ void receive( const FunctionCallbackInfo<Value>& args ) {
 			return;
 		}
 		msg_len = attr.mq_msgsize;
-		buff = node::Buffer::New( isolate, msg_len );
-		msg_ptr = node::Buffer::Data( buff );
-		//buff_created = true;
+		buff = Buffer::New( isolate, msg_len );
+		msg_ptr = Buffer::Data( buff );
 	}
-	else if( args.Length() == 3 ) {
-		if( ! node::Buffer::HasInstance(args[1]) ) {
+	else if( args.Length() == 2 ) {
+		if( ! Buffer::HasInstance(args[1]) ) {
 			TYPE_ERROR( isolate, "Second argument should be a buffer" );
 			return;
 		}
-		if( ! args[2]->IsFunction() ) {
-			TYPE_ERROR( isolate, "Last argument should be a function" );
-			return;
-		}
 		buff = args[1]->ToObject();
-		msg_ptr = node::Buffer::Data( buff );
-		msg_len = node::Buffer::Length( buff );
-		cb = Local<Function>::Cast( args[2] );
+		msg_ptr = Buffer::Data( buff );
+		msg_len = Buffer::Length( buff );
 	}
-	else if( args.Length() > 3 ) {
-		if( ! node::Buffer::HasInstance(args[1]) ) {
+	else if( args.Length() > 2 ) {
+		if( ! Buffer::HasInstance(args[1]) ) {
 			TYPE_ERROR( isolate, "Second argument should be a buffer" );
 			return;
 		}
@@ -313,35 +306,27 @@ void receive( const FunctionCallbackInfo<Value>& args ) {
 			TYPE_ERROR( isolate, "Third argument should be an integer" );
 			return;
 		}
-		if( ! args[3]->IsFunction() ) {
-			TYPE_ERROR( isolate, "Fourth argument should be a function" );
-			return;
-		}
 		buff = args[1]->ToObject();
-		msg_ptr = node::Buffer::Data( buff );
+		msg_ptr = Buffer::Data( buff );
 		msg_len = args[2]->Uint32Value();
-		size_t buff_len = node::Buffer::Length( buff );
+		size_t buff_len = Buffer::Length( buff );
 		if( msg_len > buff_len ) {
 			RANGE_ERROR( isolate, "Buffer size is less than specified" );
 			return;
 		}
-		cb = Local<Function>::Cast( args[3] );
 	}
 	
 	ssize_t ret = mq_receive( mqd, msg_ptr, msg_len, &msg_prio );
 	if( ret < 0 ) {
 		Local<Value> err = ErrnoException( isolate, errno, "mq_receive" );
-		Local<Value> argv[1] = { err };
-		cb->Call( isolate->GetCurrentContext()->Global(), 1, argv );
+		args.GetReturnValue().Set( err );
 	}
 	else {
-		Local<Value> argv[4] = {
-			Undefined(isolate ),
-			buff,
-			Number::New( isolate, ret ),
-			Number::New( isolate, msg_prio )
-		};
-		cb->Call( isolate->GetCurrentContext()->Global(), 4, argv );
+		Local<Object> result = Object::New( isolate );
+		SET_PROP_BUFF( isolate, result, "buff", buff  );
+		SET_PROP_NUMB( isolate, result, "size", ret );
+		SET_PROP_NUMB( isolate, result, "prio", msg_prio );
+		args.GetReturnValue().Set( result );
 	}
 }
 
